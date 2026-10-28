@@ -1,6 +1,6 @@
 import {initializeApp,getApps,getApp} from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,setPersistence,browserLocalPersistence} from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js';
-import {getFirestore,doc,onSnapshot,setDoc} from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js';
+import {getFirestore,doc,getDoc,onSnapshot,setDoc} from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js';
 const cfg={apiKey:'AIzaSyDoZly1sMrvNtS91isAiWnR5YNdw5_1FiQ',authDomain:'minhas-recargas-byd.firebaseapp.com',projectId:'minhas-recargas-byd',storageBucket:'minhas-recargas-byd.firebasestorage.app',messagingSenderId:'141721087925',appId:'1:141721087925:web:975c09f90de7c9012773fc'};
 const app=getApps().length?getApp():initializeApp(cfg),auth=getAuth(app),db=getFirestore(app),$=id=>document.getElementById(id);
 const brl=n=>Number(n).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}),fmt=n=>Number(n).toLocaleString('pt-BR',{maximumFractionDigits:2}),num=v=>Number(String(v??'').trim().replace(/\s/g,'').replace(/\.(?=\d{3}(?:\D|$))/g,'').replace(',','.')),today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
@@ -17,29 +17,46 @@ function render(){const month=$('filterMonth').value||today().slice(0,7),day=$('
  function list(id,items,type){$(id).replaceChildren();if(!items.length){const p=document.createElement('p');p.className='hint';p.textContent='Nenhum lançamento.';$(id).append(p)}for(const r of [...items].sort((a,b)=>b.date.localeCompare(a.date))){const div=document.createElement('div');div.className='record';const left=document.createElement('div'),right=document.createElement('div'),title=document.createElement('strong'),small=document.createElement('small'),button=document.createElement('button');title.textContent=r.date.split('-').reverse().join('/');small.textContent=type==='ride'?`${fmt(r.km)} km · ${fmt(r.hours)} h · ${r.source==='Excel 2026'?'Energia: custo histórico '+brl(r.energyCostOverride)+' (kWh não informado)':fmt(r.kwh)+' kWh'} · Uber ${brl(r.uber)} · 99 ${brl(r.n99)}${r.other?' · Outros '+brl(r.other):''}${r.bonus?' · Bônus '+brl(r.bonus):''}`:`${r.category} · ${r.note||'Sem observação'}`;left.append(title,small);const price=document.createElement('strong');price.textContent=type==='ride'?brl(r.uber+r.n99+(r.other||0)+(r.bonus||0)):brl(r.value);button.textContent='Excluir';button.className='danger';button.onclick=async()=>{if(!confirm('Excluir este registro?'))return;const key=type==='ride'?'rides':'expenses',old=state[key];state[key]=old.filter(x=>x.id!==r.id);if(!await save())state[key]=old;render()};right.append(price,button);div.append(left,right);$(id).append(div)}}
  list('rides',state.rides,'ride');list('expList',state.expenses,'expense');const byday=new Map();for(const r of rides){const x=byday.get(r.date)||{count:0,rev:0,km:0,kwh:0,hours:0};x.count++;x.rev+=r.uber+r.n99+(r.other||0)+(r.bonus||0);x.km+=r.km;x.kwh+=r.kwh;x.hours+=r.hours;byday.set(r.date,x)}$('days').replaceChildren();for(const [d,v] of [...byday].sort((a,b)=>b[0].localeCompare(a[0]))){const p=document.createElement('div');p.className='record';p.textContent=`${d.split('-').reverse().join('/')} — ${v.count} lançamento(s) · ${brl(v.rev)} · ${fmt(v.km)} km · ${fmt(v.hours)} h · ${fmt(v.kwh)} kWh`;$('days').append(p)}if(!byday.size)$('days').textContent='Nenhuma corrida neste período.';}
 for(const b of document.querySelectorAll('[data-tab]'))b.onclick=()=>show(b.dataset.tab);
-function show(name){for(const s of document.querySelectorAll('main > section'))s.hidden=s.id!==name;for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===name);location.hash=name}const start=location.hash.slice(1);show(['corridas','despesas','resumo','ajustes'].includes(start)?start:'corridas');window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(['corridas','despesas','resumo','ajustes'].includes(h))show(h)});
+function show(name){for(const s of document.querySelectorAll('main > section'))s.hidden=s.id!==name;for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===name);history.replaceState(null,'',location.pathname+'#'+name);window.scrollTo({top:0,left:0,behavior:'instant'})}const start=location.hash.slice(1);show(['corridas','despesas','resumo','ajustes'].includes(start)?start:'corridas');window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(['corridas','despesas','resumo','ajustes'].includes(h))show(h)});
 $('rideForm').onsubmit=async e=>{e.preventDefault();if(!permitted())return;const r={id:newId(),date:$('rideDate').value,hours:num($('rideHours').value),km:num($('rideKm').value),kwh:num($('rideKwh').value),liters:num($('rideLiters').value||0),uber:num($('rideUber').value||0),n99:num($('ride99').value||0),tariff:state.settings.tariff,perKm:state.settings.perKm};if(!r.date||!['hours','km','kwh','liters','uber','n99'].every(k=>safe(r[k])))return alert('Confira os valores de corrida.');state.rides.push(r);if(await save()){for(const id of ['rideHours','rideKm','rideKwh'])$(id).value='';$('msg').textContent='Corrida salva na nuvem!'}else state.rides.pop();render()};
 $('expenseForm').onsubmit=async e=>{e.preventDefault();if(!permitted())return;const x={id:newId(),date:$('expDate').value,category:$('expCategory').value,value:num($('expValue').value),note:$('expNote').value.slice(0,140)};if(!x.date||!safe(x.value)||x.value<=0)return alert('Informe data e valor válidos.');state.expenses.push(x);if(await save()){$('expValue').value='';$('expNote').value=''}else state.expenses.pop();render()};
 $('saveSettings').onclick=async()=>{if(!permitted())return;const next={tariff:num($('tariff').value),perKm:num($('perKm').value),fuelPrice:num($('fuelPrice').value)};if(!Object.values(next).every(safe)||next.tariff<=0)return alert('Valores inválidos.');const old=state.settings;state.settings=next;if(!await save())state.settings=old;render()};
 $('filterMonth').onchange=()=>{$('filterDate').value='';render()};$('filterDate').onchange=()=>{if($('filterDate').value)$('filterMonth').value=$('filterDate').value.slice(0,7);render()};$('clearDay').onclick=()=>{$('filterDate').value='';render()};
 function dl(n,c,t){const u=URL.createObjectURL(new Blob([c],{type:t})),a=document.createElement('a');a.href=u;a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(u),5000)}
-$('exportCSV').onclick=()=>{const rows=[['Data','Horas','Km','kWh','Litros','Uber','99','Outros ganhos','Bônus','Custo energia histórico'],...state.rides.map(r=>[r.date,r.hours,r.km,r.source==='Excel 2026'?'':r.kwh,r.liters,r.uber,r.n99,r.other||0,r.bonus||0,r.energyCostOverride??''])];dl('corridas-byd.csv','\uFEFF'+rows.map(r=>r.join(';')).join('\r\n'),'text/csv;charset=utf-8')};
+const unusedExportCSV=()=>{const rows=[['Data','Horas','Km','kWh','Litros','Uber','99','Outros ganhos','Bônus','Custo energia histórico'],...state.rides.map(r=>[r.date,r.hours,r.km,r.source==='Excel 2026'?'':r.kwh,r.liters,r.uber,r.n99,r.other||0,r.bonus||0,r.energyCostOverride??''])];dl('corridas-byd.csv','\uFEFF'+rows.map(r=>r.join(';')).join('\r\n'),'text/csv;charset=utf-8')};
 
-$('excelImport').onclick=async()=>{
+const fullRecargasRef=()=>doc(db,'usuarios',auth.currentUser.uid,'dados','estado');
+$('exportAll').onclick=async()=>{
  if(!permitted())return;
- const f=$('excelImportFile').files?.[0];
- if(!f){alert('Selecione primeiro o arquivo JSON do histórico do Excel.');return}
- let source;
- try{source=JSON.parse(await f.text())}catch(e){alert('Arquivo inválido. Selecione o JSON enviado junto com esta versão.');return}
- if(source.type!=='byd-king-corridas-excel-v1'||!Array.isArray(source.rides)||source.rides.length>2000||!source.rides.every(r=>typeof r.id==='string'&&r.id.startsWith('excel-2026-linha-')&&/^\d{4}-\d{2}-\d{2}$/.test(r.date)&&['uber','n99','hours','km','energyCostOverride'].every(k=>Number.isFinite(r[k])&&r[k]>=0))){alert('Histórico incompatível.');return}
- const existing=new Set(state.rides.map(r=>r.id));const incoming=source.rides.filter(r=>!existing.has(r.id));
- if(!incoming.length){$('excelImportStatus').textContent='Todos os registros deste arquivo já foram importados. Nenhum duplicado foi criado.';return}
- const msg=`Importar ${incoming.length} corridas históricas? Nenhum registro atual será apagado. Os valores de energia do Excel serão mantidos em reais (sem inventar kWh).`;
- if(!confirm(msg))return;
- state.rides.push(...incoming);
- if(await save()){$('excelImportStatus').textContent=`Importação concluída: ${incoming.length} lançamento(s) sincronizado(s) com o Firebase.`;$('filterMonth').value=incoming[incoming.length-1].date.slice(0,7);$('filterDate').value='';render()}
- else{state.rides=state.rides.filter(r=>!incoming.some(x=>x.id===r.id));render();$('excelImportStatus').textContent='Não foi possível importar; nenhuma alteração local foi mantida.'}
+ try{
+  $('backupInfo').textContent='Preparando backup completo…';
+  const snap=await getDoc(fullRecargasRef());
+  const backup={type:'byd-king-full-backup-v1',exportedAt:new Date().toISOString(),corridas:{rides:state.rides,expenses:state.expenses,settings:state.settings},recargas:snap.exists()?snap.data():{records:[],tariff:1.185,closeDay:14,closings:{}}};
+  dl('byd-king-backup-'+today()+'.json',JSON.stringify(backup,null,2),'application/json');
+  $('backupInfo').textContent='Backup completo exportado. Guarde o arquivo em local seguro.';
+ }catch(e){$('backupInfo').textContent='Falha ao exportar: '+e.message}
+};
+$('importAll').onclick=()=>{if(permitted())$('backupAllFile').click()};
+$('backupAllFile').onchange=async e=>{
+ const f=e.target.files?.[0];if(!f)return;
+ try{
+  if(f.size>8_000_000)throw Error('Arquivo muito grande');
+  const backup=JSON.parse(await f.text());
+  if(backup.type!=='byd-king-full-backup-v1'||!backup.corridas||!backup.recargas||!Array.isArray(backup.corridas.rides)||!Array.isArray(backup.corridas.expenses)||!Array.isArray(backup.recargas.records))throw Error('Formato de backup incompatível');
+  const validEntries=(items)=>items.length<=30000&&items.every(x=>x&&typeof x.id==='string'&&x.id.length<150&&/^\d{4}-\d{2}-\d{2}$/.test(x.date));
+  if(!validEntries(backup.corridas.rides)||!validEntries(backup.corridas.expenses)||!validEntries(backup.recargas.records))throw Error('Lançamentos inválidos');
+  const snap=await getDoc(fullRecargasRef()),currentR=snap.exists()?snap.data():{records:[],tariff:1.185,closeDay:14,closings:{}};
+  const merge=(current,incoming)=>{const ids=new Set(current.map(x=>x.id));return [...current,...incoming.filter(x=>!ids.has(x.id))]};
+  const mergedR={...currentR,records:merge(currentR.records||[],backup.recargas.records)};
+  const mergedC={...state,rides:merge(state.rides,backup.corridas.rides),expenses:merge(state.expenses,backup.corridas.expenses)};
+  const addedR=mergedR.records.length-(currentR.records||[]).length,addedC=mergedC.rides.length-state.rides.length,addedE=mergedC.expenses.length-state.expenses.length;
+  if(!confirm(`Importar ${addedC} corrida(s), ${addedE} despesa(s) e ${addedR} recarga(s)?\nRegistros existentes serão preservados. Configurações atuais não serão sobrescritas.`))return;
+  $('backupInfo').textContent='Importando dados na nuvem…';
+  await setDoc(fullRecargasRef(),mergedR);
+  await setDoc(ref,{...mergedC,updatedAt:new Date().toISOString()});
+  $('backupInfo').textContent='Importação concluída e sincronizada.';
+ }catch(err){$('backupInfo').textContent='Erro na importação: '+err.message;alert('Não foi possível importar: '+err.message)}finally{e.target.value=''}
 };
 $('googleLogin').onclick=async()=>{try{await setPersistence(auth,browserLocalPersistence);await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){status('Erro de login: '+e.message)}};
 onAuthStateChanged(auth,user=>{ready=false;if(unsubscribe){unsubscribe();unsubscribe=null}if(!user){$('googleLogin').hidden=false;$('authStatus').textContent='Não conectado';status('Entre com Google para salvar corridas e despesas.');return} $('googleLogin').hidden=true;$('authStatus').textContent='Conectado: '+user.email;status('Carregando dados da nuvem…');ref=doc(db,'usuarios',user.uid,'dados','corridas');unsubscribe=onSnapshot(ref,snap=>{if(snap.metadata.hasPendingWrites)return;const data=snap.data();state=data?{rides:Array.isArray(data.rides)?data.rides:[],expenses:Array.isArray(data.expenses)?data.expenses:[],settings:data.settings||initial().settings}:initial();ready=true;fields();status('Sincronizado ✓');render()},e=>{ready=false;status('Erro ao sincronizar: '+e.message)})});
-fields();render();
+fields();render();window.addEventListener('load',()=>window.scrollTo(0,0));
