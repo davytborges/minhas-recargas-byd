@@ -5,20 +5,16 @@ const firebaseConfig={apiKey:'AIzaSyDoZly1sMrvNtS91isAiWnR5YNdw5_1FiQ',authDomai
 const app=getApps().length?getApp():initializeApp(firebaseConfig);
 const auth=getAuth(app), db=getFirestore(app), provider=new GoogleAuthProvider();
 const $=id=>document.getElementById(id),local=window.BYDLocal;
-const LEGACY_KEY='minhas_recargas_byd_v1';
-let uid=null,remoteRef=null,unsubscribe=null,loaded=false,revision=0,writeQueue=Promise.resolve(),lastRemote=null,recovering=false;
+let uid=null,remoteRef=null,unsubscribe=null,loaded=false,revision=0,writeQueue=Promise.resolve(),lastRemote=null;
 const status=(label,msg)=>{if($('re_cloudIndicator'))$('re_cloudIndicator').textContent=label;if($('re_cloudMessage'))$('re_cloudMessage').textContent=msg};
 const normalize=s=>({tariff:Number(s?.tariff)||1.185,records:Array.isArray(s?.records)?s.records:[],closeDay:Number(s?.closeDay)||14,closings:s?.closings&&typeof s.closings==='object'?s.closings:{},locations:Array.isArray(s?.locations)?s.locations:['Casa','Trabalho']});
 const valid=s=>Array.isArray(s?.records)&&s.records.every(r=>r&&typeof r.id==='string'&&typeof r.date==='string'&&Number.isFinite(Number(r.kwh)));
-const keyFor=userId=>'byd-recargas-seguro-'+userId;
-function readBackup(key){try{const obj=JSON.parse(localStorage.getItem(key));return valid(obj)?normalize(obj):null}catch{return null}}
-function writeBackup(userId,s){if(!userId||!valid(s))return;try{const previous=readBackup(keyFor(userId));const incoming=normalize(s);const byId=new Map((previous?.records||[]).map(r=>[r.id,r]));for(const r of incoming.records)byId.set(r.id,r);localStorage.setItem(keyFor(userId),JSON.stringify({...incoming,records:[...byId.values()]}))}catch(e){status('Atenção','Não foi possível guardar a cópia de segurança local: '+e.message)}}
 const mergeRecords=(existing,incoming)=>{const map=new Map(existing.map(r=>[r.id,r]));for(const r of incoming)if(!map.has(r.id))map.set(r.id,r);return [...map.values()]};
 function showRemote(data,myRevision){if(myRevision!==revision)return;const parsed=normalize(data);if(!valid(parsed)){status('Formato inesperado','O Firebase retornou um formato inválido. Nenhuma gravação será realizada.');loaded=false;return}
  const previous=lastRemote;loaded=true;
  // Nunca substituir visualização de histórico confirmado por leitura posterior vazia.
  if(previous?.records.length&&!parsed.records.length){status('Alerta de sincronização','O Firebase retornou lista vazia após conter recargas. Histórico anterior preservado neste aparelho.');return}
- lastRemote=parsed;local.apply(parsed);writeBackup(uid,parsed);status('Sincronizado',`${parsed.records.length} recarga(s) consultada(s) no Firebase.`)
+ lastRemote=parsed;local.apply(parsed);status('Sincronizado',`${parsed.records.length} recarga(s) consultada(s) no Firebase.`)
 }
 async function mergeToCloud(input,expectedRevision,expectedUid){
  if(expectedRevision!==revision||auth.currentUser?.uid!==expectedUid)throw Error('Conta Google alterada. Operação cancelada.');
@@ -28,22 +24,6 @@ async function mergeToCloud(input,expectedRevision,expectedUid){
  const next={...current,records:mergeRecords(current.records,proposed.records),tariff:proposed.tariff,closeDay:proposed.closeDay,closings:{...current.closings,...proposed.closings},locations:[...new Set([...current.locations,...proposed.locations])],updatedAt:new Date().toISOString()};tx.set(ref,next);return next});
  if(expectedRevision!==revision||auth.currentUser?.uid!==expectedUid)throw Error('Conta alterada durante a gravação. Confira os registros antes de continuar.');
  showRemote(result,expectedRevision);return result
-}
-async function offerRecovery(myRevision,myUid,cloudData){
- if(recovering||myRevision!==revision||!myUid)return;
- const bound=readBackup(keyFor(myUid)), legacy=readBackup(LEGACY_KEY);
- const fromBackup=bound?bound:(legacy?.records.length?legacy:null);
- if(!fromBackup)return;
- const missing=fromBackup.records.filter(r=>!new Set(cloudData.records.map(x=>x.id)).has(r.id));
- if(!missing.length)return;
- recovering=true;
- try{
-  const source=bound?'uma cópia de segurança vinculada a esta conta':'o histórico antigo deste navegador (ainda sem vínculo com uma conta)';
-  if(!confirm(`O Firebase mostra ${cloudData.records.length} recarga(s), mas encontrei ${missing.length} registro(s) adicionais em ${source}.\n\nVocê confirma que esses registros pertencem à conta Google conectada e deseja recuperá-los para o Firebase?`)){status('Recuperação disponível',`${missing.length} recarga(s) antigas estão guardadas neste navegador, mas não foram enviadas à nuvem.`);return}
-  status('Recuperando…','Mesclando registros antigos, sem apagar os existentes.');
-  await mergeToCloud({...cloudData,records:missing},myRevision,myUid);
-  status('Recuperação concluída','Registros recuperados e confirmados no Firebase.');
- }catch(e){status('Erro na recuperação',e.message||String(e))}finally{recovering=false}
 }
 function reset(user){revision++;const current=revision;uid=user?.uid||null;loaded=false;lastRemote=null;if(unsubscribe){unsubscribe();unsubscribe=null}remoteRef=null;
  // Limpa apenas a interface; jamais apagar o backup local de recuperação.
@@ -55,11 +35,10 @@ function reset(user){revision++;const current=revision;uid=user?.uid||null;loade
   const raw=snapshot.exists()?snapshot.data():{records:[]};
   if(!valid(raw)){status('Erro de formato','O documento remoto é inválido. Não cadastre novas recargas.');return}
   showRemote(raw,current);
-  await offerRecovery(current,uid,normalize(raw));
  }).catch(e=>{if(current===revision){if(!loaded)status('Erro de conexão','Não foi possível confirmar os dados no Firebase: '+(e.message||e)+'. Seus backups locais foram preservados.')}});
  unsubscribe=onSnapshot(remoteRef,{includeMetadataChanges:true},snapshot=>{
   if(current!==revision||snapshot.metadata.fromCache||snapshot.metadata.hasPendingWrites)return;
-  const raw=snapshot.exists()?snapshot.data():{records:[]};if(valid(raw)){showRemote(raw,current);if(!recovering)offerRecovery(current,uid,normalize(raw));}
+  const raw=snapshot.exists()?snapshot.data():{records:[]};if(valid(raw))showRemote(raw,current);
  },e=>{if(current===revision)status('Falha de sincronização',e.message||String(e))});
 }
 async function deleteRecord(recordId){
@@ -76,15 +55,15 @@ async function deleteRecord(recordId){
   const next={...raw,records:remaining,updatedAt:new Date().toISOString()};tx.set(target,next);return next;
  });
  if(myRevision!==revision||auth.currentUser?.uid!==myUid)throw Error('A conta foi alterada durante a exclusão.');
- // Remova também do backup deste usuário para não restaurar um registro excluído.
- try{localStorage.setItem(keyFor(myUid),JSON.stringify(normalize(result)));}catch{}
+ // Exclusão confirmada diretamente no Firebase; sem recuperação automática.
+ 
  lastRemote=null;showRemote(result,myRevision);
  status('Sincronizado','Recarga excluída e confirmada no Firebase.');
  return true;
 }
 async function commit(input){const current=revision,userId=uid;if(!loaded||!userId||auth.currentUser?.uid!==userId)throw Error('Aguarde autenticação e sincronização do Firebase.');
  status('Salvando…','Verificando e preservando registros existentes na nuvem.');
- const result=await mergeToCloud(input,current,userId);writeBackup(userId,result);status('Sincronizado',`${result.records.length} recarga(s) confirmada(s) no Firebase.`);return true
+ const result=await mergeToCloud(input,current,userId);status('Sincronizado',`${result.records.length} recarga(s) confirmada(s) no Firebase.`);return true
 }
 const enqueue=input=>{const job=writeQueue.catch(()=>{}).then(()=>commit(input));writeQueue=job.catch(()=>{});return job};
 window.BYDCloud={commit:enqueue,deleteRecord,onLocalSave:input=>{
