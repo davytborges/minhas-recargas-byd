@@ -1,4 +1,1 @@
-BYD King Gestão v21
-Substitua no GitHub somente index.html, corridas.js, cloud.js e sw.js.
-Não altere Firebase, não exclua documentos.
-Teste login, logout, recargas e corridas antes de novos lançamentos reais.
+BYD King Gestão v24 - estabilidade de operações. Envie os arquivos index.html, corridas.js, cloud.js e sw.js para a raiz do repositório, preservando os demais. Não apague dados do navegador ou Firebase. Teste com uma recarga e uma corrida de pequeno valor.

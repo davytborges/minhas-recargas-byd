@@ -32,13 +32,13 @@ async function mergeToCloud(input,expectedRevision,expectedUid){
 async function offerRecovery(myRevision,myUid,cloudData){
  if(recovering||myRevision!==revision||!myUid)return;
  const bound=readBackup(keyFor(myUid)), legacy=readBackup(LEGACY_KEY);
- const fromBackup=bound?.records.length?bound:legacy?.records.length?legacy:null;
+ const fromBackup=bound?bound:(legacy?.records.length?legacy:null);
  if(!fromBackup)return;
  const missing=fromBackup.records.filter(r=>!new Set(cloudData.records.map(x=>x.id)).has(r.id));
  if(!missing.length)return;
  recovering=true;
  try{
-  const source=bound?.records.length?'uma cópia de segurança vinculada a esta conta':'o histórico antigo deste navegador (ainda sem vínculo com uma conta)';
+  const source=bound?'uma cópia de segurança vinculada a esta conta':'o histórico antigo deste navegador (ainda sem vínculo com uma conta)';
   if(!confirm(`O Firebase mostra ${cloudData.records.length} recarga(s), mas encontrei ${missing.length} registro(s) adicionais em ${source}.\n\nVocê confirma que esses registros pertencem à conta Google conectada e deseja recuperá-los para o Firebase?`)){status('Recuperação disponível',`${missing.length} recarga(s) antigas estão guardadas neste navegador, mas não foram enviadas à nuvem.`);return}
   status('Recuperando…','Mesclando registros antigos, sem apagar os existentes.');
   await mergeToCloud({...cloudData,records:missing},myRevision,myUid);
@@ -56,19 +56,39 @@ function reset(user){revision++;const current=revision;uid=user?.uid||null;loade
   if(!valid(raw)){status('Erro de formato','O documento remoto é inválido. Não cadastre novas recargas.');return}
   showRemote(raw,current);
   await offerRecovery(current,uid,normalize(raw));
- }).catch(e=>{if(current===revision){loaded=false;status('Erro de conexão','Não foi possível confirmar os dados no Firebase: '+(e.message||e)+'. Seus backups locais foram preservados.')}});
+ }).catch(e=>{if(current===revision){if(!loaded)status('Erro de conexão','Não foi possível confirmar os dados no Firebase: '+(e.message||e)+'. Seus backups locais foram preservados.')}});
  unsubscribe=onSnapshot(remoteRef,{includeMetadataChanges:true},snapshot=>{
-  if(current!==revision||!loaded||snapshot.metadata.fromCache||snapshot.metadata.hasPendingWrites||!snapshot.exists())return;
-  const raw=snapshot.data();if(valid(raw))showRemote(raw,current);
+  if(current!==revision||snapshot.metadata.fromCache||snapshot.metadata.hasPendingWrites)return;
+  const raw=snapshot.exists()?snapshot.data():{records:[]};if(valid(raw)){showRemote(raw,current);if(!recovering)offerRecovery(current,uid,normalize(raw));}
  },e=>{if(current===revision)status('Falha de sincronização',e.message||String(e))});
+}
+async function deleteRecord(recordId){
+ const myRevision=revision,myUid=uid;
+ if(!loaded||!myUid||auth.currentUser?.uid!==myUid)throw Error('Aguarde a sincronização com o Firebase antes de excluir.');
+ if(!confirm('Excluir definitivamente esta recarga do Firebase?'))return false;
+ status('Excluindo…','Confirmando exclusão no Firebase.');
+ const target=doc(db,'usuarios',myUid,'dados','estado');
+ const result=await runTransaction(db,async tx=>{
+  const snap=await tx.get(target);
+  if(!snap.exists()||!valid(snap.data()))throw Error('Histórico remoto indisponível. Exclusão cancelada.');
+  const raw=snap.data(),remaining=raw.records.filter(r=>r.id!==recordId);
+  if(remaining.length===raw.records.length)throw Error('Recarga não encontrada na nuvem; atualize a página.');
+  const next={...raw,records:remaining,updatedAt:new Date().toISOString()};tx.set(target,next);return next;
+ });
+ if(myRevision!==revision||auth.currentUser?.uid!==myUid)throw Error('A conta foi alterada durante a exclusão.');
+ // Remova também do backup deste usuário para não restaurar um registro excluído.
+ try{localStorage.setItem(keyFor(myUid),JSON.stringify(normalize(result)));}catch{}
+ lastRemote=null;showRemote(result,myRevision);
+ status('Sincronizado','Recarga excluída e confirmada no Firebase.');
+ return true;
 }
 async function commit(input){const current=revision,userId=uid;if(!loaded||!userId||auth.currentUser?.uid!==userId)throw Error('Aguarde autenticação e sincronização do Firebase.');
  status('Salvando…','Verificando e preservando registros existentes na nuvem.');
  const result=await mergeToCloud(input,current,userId);writeBackup(userId,result);status('Sincronizado',`${result.records.length} recarga(s) confirmada(s) no Firebase.`);return true
 }
 const enqueue=input=>{const job=writeQueue.catch(()=>{}).then(()=>commit(input));writeQueue=job.catch(()=>{});return job};
-window.BYDCloud={commit:enqueue,onLocalSave:input=>{
- if(!loaded||!uid)return;
+window.BYDCloud={commit:enqueue,deleteRecord,onLocalSave:input=>{
+ if(!loaded||!uid){status('Aguardando','Entre com Google e aguarde o Firebase para alterar os dados.');return;}
  const ids=new Set((input.records||[]).map(r=>r.id));
  if(lastRemote?.records.some(r=>!ids.has(r.id))){status('Exclusão bloqueada','A exclusão de recargas permanece desativada para proteger o histórico.');local.apply(lastRemote);return}
  enqueue(input).catch(e=>{status('Erro ao salvar',e.message||String(e));if(lastRemote)local.apply(lastRemote)})
