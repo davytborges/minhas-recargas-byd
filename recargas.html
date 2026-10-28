@@ -11,12 +11,26 @@
 .appnav{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0}.appnav a{flex:1;min-width:100px;text-align:center;border-radius:12px;padding:12px 5px;text-decoration:none;background:#20394f;color:#eef7ff;font-weight:700;font-size:13px}.appnav a.selected{background:var(--accent);color:#052a22}
 .wrap{max-width:830px;padding:23px 16px 70px}.eyebrow{font-size:12px;color:#4de0b0}.appnav{margin:20px 0;gap:7px}.appnav a{background:#1c364a;color:#cce0ed;font-size:14px;min-height:45px}.appnav a.selected{background:#4de0b0;color:#06291e}.card{background:#10273b;border-color:#2c455a;border-radius:20px;margin:15px 0;box-shadow:0 9px 28px #0002}.wrap h1{font-size:30px;margin:8px 0 5px}.eyebrow{text-transform:uppercase}.wrap p{color:#abc0d0}.primary{background:#4de0b0!important;color:#06291e!important}.appnav a{flex:1;display:flex;align-items:center;justify-content:center}body{background:linear-gradient(140deg,#16344d,#071522 45%)}
 @media(max-width:440px){.wrap{padding:19px 12px 70px}.card{padding:16px}.appnav a{min-width:105px}}
+
+/* Cabecalho unificado - nao altera armazenamento nem autenticacao */
+.wrap{max-width:850px}
+.unified-title{font-size:29px;line-height:1.15;margin:0 0 14px;font-weight:800;letter-spacing:-.6px}
+.compact-login{margin:0 0 16px!important;padding:12px 17px!important;border-radius:15px!important;box-shadow:none!important}
+.compact-login .row,.compact-login .top{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap}
+.compact-login strong{font-size:13px}
+.compact-login .small,.compact-login .hint,.compact-login p{font-size:12px;margin:3px 0 0;line-height:1.4}
+.compact-login button{min-height:32px!important;padding:7px 10px!important;width:auto!important;margin:0!important;font-size:12px!important}
+.compact-login .actions{margin:5px 0 0!important;gap:6px}
+.compact-login h2{font-size:13px!important;margin:0!important}
+.compact-login #cloudMessage{font-size:12px;margin:4px 0 0}
+.compact-login #cloudIndicator{font-size:11px}
+.compact-login #logoutGoogle{display:none!important}
+.compact-login #loginGoogle[hidden]{display:none!important}
+.compact-login #logoutGoogle[hidden]{display:none!important}
 </style>
 </head>
 <body><main class="wrap">
-<div class="eyebrow">BYD KING · Controle particular</div>
-<h1>BYD King — Gestão</h1><nav class="appnav" aria-label="Menu principal"><a href="./index.html#corridas">🚘 Corridas</a><a class="selected" href="./recargas.html">⚡ Recargas</a><a href="./index.html#resumo">📊 Resumo</a><a href="./index.html#despesas">💳 Despesas</a><a href="./index.html#ajustes">⚙ Ajustes</a></nav><p>Registre apenas a data e os kWh mostrados pelo carregador. O custo é calculado automaticamente.</p>
-<section class="card" id="cloudCard"><div class="top"><h2>Sincronização na nuvem</h2><span id="cloudIndicator" class="hint">Desconectado</span></div><p id="cloudMessage">Entre com sua conta Google para salvar e acessar recargas em outros aparelhos.</p><div class="actions"><button id="loginGoogle" class="primary" type="button">Entrar com Google</button><button id="logoutGoogle" class="secondary" type="button" hidden>Sair da conta</button></div><p class="hint">Suas recargas são sincronizadas com sua conta Google.</p></section>
+<h1 class="unified-title">BYD King — Gestão</h1><section class="card compact-login" id="cloudCard"><div class="top"><h2>Conta Google</h2><span id="cloudIndicator" class="hint">Desconectado</span></div><p id="cloudMessage">Entre com sua conta Google para salvar e acessar recargas em outros aparelhos.</p><div class="actions"><button id="loginGoogle" class="primary" type="button">Entrar com Google</button><button id="logoutGoogle" class="secondary" type="button" hidden>Sair da conta</button></div></section><nav class="appnav" aria-label="Menu principal"><a href="./index.html#corridas">🚘 Corridas</a><a class="selected" href="./recargas.html">⚡ Recargas</a><a href="./index.html#resumo">📊 Resumo</a><a href="./index.html#despesas">💳 Despesas</a><a href="./index.html#ajustes">⚙ Ajustes</a></nav><p>Registre apenas a data e os kWh mostrados pelo carregador. O custo é calculado automaticamente.</p>
 <section class="card"><h2>Preço da energia</h2><label for="tariff">Tarifa (R$ por kWh)</label><input id="tariff" inputmode="decimal" type="text" autocomplete="off" value="1,185"/><div class="hint">Valor inicial calculado a partir das quatro faturas. Pode alterar quando quiser. Recargas antigas mantêm a tarifa do dia.</div><div id="toast" role="status"></div></section>
 <section class="card"><h2>Nova recarga</h2><form id="addform"><div class="grid"><div><label for="date">Data da recarga</label><input type="date" id="date" required/></div><div><label for="kwh">Energia consumida (kWh)</label><input type="text" inputmode="decimal" id="kwh" placeholder="Ex.: 12,5" required autocomplete="off"/></div></div><div class="costPreview">Custo calculado: <strong id="preview">R$ 0,00</strong></div><button class="primary" type="submit">+ Salvar recarga</button></form></section>
 <section class="card"><h2>Fechamento da fatura</h2><div class="grid"><div><label for="closeDay">Dia padrão da leitura</label><input id="closeDay" type="number" min="1" max="31" value="14"/></div><div><label for="closeDate">Data real da leitura do mês selecionado</label><input id="closeDate" type="date"/></div></div><p class="hint">Use o dia padrão para estimar. Se a Equatorial realizar a leitura em outra data, informe a data real acima e toque em Salvar leitura. O período vai da leitura anterior (não incluída) até a leitura atual (incluída).</p><button class="primary" id="saveClose" type="button">Salvar leitura desta fatura</button><div id="period" class="hint"></div></section>
