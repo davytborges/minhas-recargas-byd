@@ -1,4 +1,4 @@
-const CACHE='byd-gestao-v22-recargas-transacao';
+const CACHE='byd-gestao-v23-recuperacao-segura';
 const ASSETS=['./','./index.html','./cloud.js','./corridas.js','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
