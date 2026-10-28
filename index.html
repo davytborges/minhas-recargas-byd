@@ -60,6 +60,11 @@ main.wrap>section{width:100%;min-width:0}
 
 /* Proteção visual: conteúdo privado fica oculto até validar a sessão Google. */
 /* Login pendente não bloqueia a navegação; formulários só salvam com autenticação. */
+
+/* Bloqueio de privacidade: só mostrar abas para sessão autenticada. */
+html:not(.byd-authenticated) main.wrap > nav.tabs,
+html:not(.byd-authenticated) main.wrap > section,
+html:not(.byd-authenticated) main.wrap > footer {display:none!important}
 </style></head><body><main class="wrap"><h1 class="unified-title">BYD King — Gestão</h1><div class="card compact-login" id="authPanel"><div class="row"><strong id="authStatus">Conectando…</strong><button class="secondary" id="googleLogin" type="button" hidden>Entrar com Google</button></div><p id="saveStatus" class="small">Aguardando o Firebase…</p></div><nav class="tabs" aria-label="Menu principal"><button data-tab="corridas" class="active">🚘 Corridas</button><button data-tab="recargas">⚡ Recargas</button><button data-tab="resumo">📊 Resumo</button><button data-tab="despesas">💳 Despesas</button><button data-tab="caixa">💰 Caixa</button><button data-tab="ajustes">⚙ Ajustes</button></nav><section id="recargas" hidden><div hidden><span id="re_cloudIndicator"></span><span id="re_cloudMessage"></span><button id="re_loginGoogle" type="button"></button><button id="re_logoutGoogle" type="button"></button></div>
 <section class="card"><h2>Preço da energia</h2><label for="re_tariff">Tarifa (R$ por kWh)</label><input id="re_tariff" inputmode="decimal" type="text" autocomplete="off" value="1,185"/><div class="hint">Valor inicial calculado a partir das quatro faturas. Pode alterar quando quiser. Recargas antigas mantêm a tarifa do dia.</div><div id="re_toast" role="status"></div></section>
 <section class="card"><h2>Nova recarga</h2><form id="re_addform"><div class="grid"><div><label for="re_date">Data da recarga</label><input type="date" id="re_date" required/></div><div><label for="re_kwh">Energia consumida (kWh)</label><input type="text" inputmode="decimal" id="re_kwh" placeholder="Ex.: 12,5" required autocomplete="off"/></div></div><div class="grid" style="margin-top:12px"><div><label for="re_location">Local da recarga</label><select id="re_location"><option value="Casa">Casa</option><option value="Trabalho">Trabalho</option></select></div></div><div class="costPreview">Custo calculado: <strong id="re_preview">R$ 0,00</strong></div><button class="primary" type="submit">+ Salvar recarga</button></form></section>
@@ -80,5 +85,5 @@ let activated=false;
 window.addEventListener('unhandledrejection',ev=>{if(!activated){title.textContent='Erro ao iniciar';status.textContent=String(ev.reason?.message||ev.reason||'Falha de conexão');}});
 window.addEventListener('error',ev=>{if(!activated){title.textContent='Erro ao iniciar';status.textContent=ev.message||'Falha no carregamento dos arquivos';}});
 const check=setTimeout(()=>{if(title.textContent.includes('Conectando')){title.textContent='Conexão não concluída';status.textContent='Verifique a conexão e recarregue. Se continuar, abra no Chrome e envie uma captura desta mensagem.';login.hidden=false;}},12000);
-try{await import('./corridas.js?v=14');activated=true;clearTimeout(check)}catch(e){clearTimeout(check);title.textContent='Erro ao iniciar Firebase';status.textContent=String(e.message||e);login.hidden=true;}
+try{await import('./corridas.js?v=21');activated=true;clearTimeout(check)}catch(e){clearTimeout(check);title.textContent='Erro ao iniciar Firebase';status.textContent=String(e.message||e);login.hidden=true;}
 </script><script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));</script></body></html>
